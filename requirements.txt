@@ -1,0 +1,8 @@
+PyQt-Fluent-Widgets>=1.5.5
+PyQtWebEngine
+pywin32
+keyboard
+winsdk
+pythonnet
+qtpy
+pywebview
