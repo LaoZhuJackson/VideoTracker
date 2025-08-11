@@ -1,7 +1,9 @@
+import json
 import sys
 import subprocess
 import time
 import ctypes
+import uuid
 from ctypes import wintypes
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import QTimer, Qt, QRect, pyqtSignal, QEvent
@@ -52,6 +54,11 @@ IsWindow.restype = wintypes.BOOL
 
 
 class WebView2Widget(QWidget):
+    # 添加信号
+    navigation_completed = pyqtSignal(str)
+    history_state_changed = pyqtSignal(bool, bool)
+    js_result_received = pyqtSignal(str, object)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
@@ -61,6 +68,14 @@ class WebView2Widget(QWidget):
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(100)
         self._poll_timer.timeout.connect(self._poll_embed)
+
+        # 用于存储JS回调
+        self.js_callbacks = {}
+
+        # 启动历史状态读取定时器
+        self.history_timer = QTimer(self)
+        self.history_timer.setInterval(500)
+        self.history_timer.timeout.connect(self.check_history_state)
 
     def setup_ui(self):
         self.setLayout(QVBoxLayout())
@@ -79,8 +94,75 @@ class WebView2Widget(QWidget):
 
         host_hwnd = int(self.embed_area.winId())  # 获取 embed_area HWND
         cmd = [sys.executable, CHILD_PY, title, url]
-        self.child_proc = subprocess.Popen(cmd)
+        # 使用stdin/stdout管道进行通信
+        self.child_proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,  # 行缓冲
+            universal_newlines=True
+        )
+        # 启动stdout读取线程
+        self.start_stdout_reader()
+
         self._poll_timer.start()
+
+    def start_stdout_reader(self):
+        """启动stdout读取线程"""
+        from threading import Thread
+        self.reader_thread = Thread(target=self.read_stdout, daemon=True)
+        self.reader_thread.start()
+
+    def read_stdout(self):
+        """读取子进程的stdout输出"""
+        while self.child_proc and self.child_proc.poll() is None:
+            try:
+                line = self.child_proc.stdout.readline().strip()
+                if not line:
+                    continue
+
+                # 处理历史状态更新
+                if line.startswith("HISTORY_STATE:"):
+                    try:
+                        state_json = line[len("HISTORY_STATE:"):]
+                        state = json.loads(state_json)
+                        self.history_state_changed.emit(
+                            state.get("can_go_back", False),
+                            state.get("can_go_forward", False)
+                        )
+                    except Exception as e:
+                        print(f"Error parsing history state: {e}")
+
+                # 处理JS执行结果
+                elif line.startswith("JS_RESULT:"):
+                    parts = line.split(":", 2)
+                    if len(parts) == 3:
+                        callback_id = parts[1]
+                        result_str = parts[2]
+                        try:
+                            result = json.loads(result_str)
+                            self.js_result_received.emit(callback_id, result)
+                        except:
+                            self.js_result_received.emit(callback_id, result_str)
+
+                # 处理JS错误
+                elif line.startswith("JS_ERROR:"):
+                    parts = line.split(":", 2)
+                    if len(parts) == 3:
+                        callback_id = parts[1]
+                        error = parts[2]
+                        self.js_result_received.emit(callback_id, Exception(error))
+
+                # 处理导航完成事件
+                elif line.startswith("Navigation completed:"):
+                    url = line[len("Navigation completed:"):].strip()
+                    self.navigation_completed.emit(url)
+
+            except Exception as e:
+                print(f"Error reading stdout: {e}")
+                break
 
     def close_webview(self):
         """关闭WebView"""
@@ -148,16 +230,44 @@ class WebView2Widget(QWidget):
         """清理资源"""
         self.close_webview()
 
+    def send_command(self, command):
+        """向子进程发送命令"""
+        if self.child_proc and self.child_proc.poll() is None:
+            try:
+                self.child_proc.stdin.write(command + "\n")
+                self.child_proc.stdin.flush()
+            except Exception as e:
+                print(f"Error sending command: {e}")
 
     def on_navigation_completed(self, args):
         pass
 
-    def load(self, url):
-        pass
+    def go_back(self):
+        """后退"""
+        self.send_command("go_back")
+
+    def go_forward(self):
+        """前进"""
+        self.send_command("go_forward")
 
     def reload(self):
-        """刷新当前页面"""
+        """刷新页面"""
+        print("Reloading...")
+        self.send_command("reload")
+
+    def load(self, url):
+        """加载指定URL"""
+        # 这个功能需要修改child_webview.py支持，暂时不实现
         pass
 
     def run_js(self, script):
-        pass
+        """执行JavaScript代码"""
+        callback_id = str(uuid.uuid4())
+        self.send_command(f"run_js:{callback_id}:{script}")
+        return callback_id
+
+    def check_history_state(self):
+        """检查历史状态（定时调用）"""
+        if self.child_proc and self.child_proc.poll() is None:
+            # 请求历史状态更新
+            self.send_command("get_history_state")
