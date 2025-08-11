@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QFrame
 from app.common.config import config
 from app.common.signal_bus import signalBus
 from app.modules.webview.webview_manager import WebView2Widget
-from app.repackge.my_web_engine_view import SinglePageWebEngineView
+# from app.repackge.my_web_engine_view import SinglePageWebEngineView
 from app.ui.BrowserWindow import Ui_Browser
 from qfluentwidgets import FluentIcon as FIF, InfoBar, InfoBarPosition, SimpleCardWidget
 
@@ -56,6 +56,11 @@ class BrowserWindow(QFrame, Ui_Browser):
         # self.web_view.loadFinished.connect(self.check_for_video)
 
         self.SearchLineEdit.searchSignal.connect(self.on_search_click)
+
+        # 连接信号
+        self.web_view.history_state_changed.connect(self.update_tool_button_enable)
+        self.web_view.navigation_completed.connect(self._update_url_display)
+
         self.ToolButton_back.clicked.connect(self.on_back_click)
         self.ToolButton_forward.clicked.connect(self.on_forward_click)
         self.ToolButton_refresh.clicked.connect(self.web_view.reload)
@@ -65,13 +70,13 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.ToolButton_back.setEnabled(False)
         self.ToolButton_forward.setEnabled(False)
 
-    def _update_url_display(self):
+    def _update_url_display(self,url):
         """页面加载完成后更新地址栏显示"""
         # 获取最终解析的URL
-        final_url = self.web_view.url()
+        # final_url = self.web_view.url()
         # 显示URL
-        display_url = final_url.toString()
-        self.SearchLineEdit.setText(display_url)
+        # display_url = final_url.toString()
+        self.SearchLineEdit.setText(url)
 
     def on_webview_initialized(self):
         """WebView2 初始化完成后再加载页面"""
@@ -96,9 +101,11 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.web_view.load(url)
         self.update_tool_button_enable()
 
-    def update_tool_button_enable(self):
-        self.ToolButton_back.setEnabled(self.web_view.history().canGoBack())
-        self.ToolButton_forward.setEnabled(self.web_view.history().canGoForward())
+    @pyqtSlot(bool, bool)
+    def update_tool_button_enable(self, can_go_back, can_go_forward):
+        """更新工具栏按钮状态"""
+        self.ToolButton_back.setEnabled(can_go_back)
+        self.ToolButton_forward.setEnabled(can_go_forward)
 
     def on_back_click(self):
         """后退按钮绑定函数"""

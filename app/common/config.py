@@ -42,7 +42,7 @@ class Config(QConfig):
     # main window
     micaEnabled = ConfigItem("MainWindow", "MicaEnabled", isWin11(), BoolValidator())
     dpiScale = OptionsConfigItem(
-        "MainWindow", "DpiScale", 1, OptionsValidator([1, 1.25, 1.5, 1.75, 2, "Auto"]), restart=True)
+        "MainWindow", "DpiScale", 'Auto', OptionsValidator([1, 1.25, 1.5, 1.75, 2, "Auto"]), restart=True)
     language = OptionsConfigItem(
         "MainWindow", "Language", Language.AUTO, OptionsValidator(Language), LanguageSerializer(), restart=True)
 
