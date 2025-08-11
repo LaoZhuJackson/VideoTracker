@@ -1,8 +1,11 @@
 # child_webview.py
 # 运行方式: python child_webview.py "<window_title>" "<url>"
+import ctypes
 import json
+import os
 import sys
 import threading
+import traceback
 
 import webview
 from webview import Window
@@ -12,39 +15,71 @@ class WebViewManager:
     def __init__(self, window: Window):
         self.window = window
         self.history = []
-        self.current_index = 0
+        # 初始设 -1，表示没有历史
+        self.current_index = -1
         self.js_results = {}
 
-        # 绑定事件
+        # 绑定事件（注意：事件可能不传 url 参数）
         window.events.loaded += self.on_navigation_completed
         window.events.shown += self.on_window_shown
 
-    def on_navigation_completed(self, url):
-        """导航完成事件处理"""
-        print(f"Navigation completed: {url}")
-        # 添加到历史记录
-        if not self.history or self.history[self.current_index] != url:
-            # 清除当前索引之后的历史记录（如果有）
-            if self.current_index < len(self.history) - 1:
-                self.history = self.history[:self.current_index + 1]
+    def on_navigation_completed(self, *args):
+        """导航完成事件处理 - 兼容不同事件签名"""
+        try:
+            # 尝试从事件参数中提取 url（有的后端会传 window 或 url 字符串）
+            url = None
+            if args:
+                first = args[0]
+                # 如果直接是字符串
+                if isinstance(first, str):
+                    url = first
+                else:
+                    # 可能传的是 window 对象或类似结构，尝试取属性
+                    url = getattr(first, "url", None) or getattr(first, "href", None) or getattr(first, "location", None)
 
-            self.history.append(url)
-            self.current_index = len(self.history) - 1
-        # 输出历史状态
-        self.output_history_state()
+            # 最后尝试从 self.window 取当前 url（某些后端支持）
+            if not url:
+                try:
+                    url = self.window.get_current_url()
+                except Exception:
+                    url = getattr(self.window, "url", None) or ""
+
+            # 正常化为字符串
+            url = url or ""
+            print(f"Navigation completed: {url}", flush=True)
+
+            # 添加到历史记录（安全地处理 current_index）
+            if not self.history or (self.current_index < 0) or (self.history[self.current_index] != url):
+                # 清除当前索引之后的历史记录（如果有）
+                if len(self.history) - 1 > self.current_index >= 0:
+                    self.history = self.history[:self.current_index + 1]
+
+                self.history.append(url)
+                self.current_index = len(self.history) - 1
+
+            # 输出历史状态
+            self.output_history_state()
+        except Exception:
+            print("NAV_ON_COMPLETED_ERROR:" + traceback.format_exc(), flush=True)
 
     def output_history_state(self):
-        """输出历史状态到stdout"""
-        state = {
-            "can_go_back": self.can_go_back(),
-            "can_go_forward": self.can_go_forward(),
-            "current_url": self.history[self.current_index] if self.current_index >= 0 else ""
-        }
-        print(f"HISTORY_STATE:{json.dumps(state)}", flush=True)
+        """输出历史状态到stdout（安全）"""
+        try:
+            current_url = ""
+            if self.history and 0 <= self.current_index < len(self.history):
+                current_url = self.history[self.current_index]
+            state = {
+                "can_go_back": self.can_go_back(),
+                "can_go_forward": self.can_go_forward(),
+                "current_url": current_url
+            }
+            print(f"HISTORY_STATE:{json.dumps(state)}", flush=True)
+        except Exception:
+            print("HISTORY_STATE_ERROR:" + traceback.format_exc(), flush=True)
 
     def on_window_shown(self):
         """窗口显示事件处理"""
-        print("Window shown")
+        print("Window shown", flush=True)
 
     def can_go_back(self):
         """是否可以后退"""
@@ -56,58 +91,109 @@ class WebViewManager:
 
     def go_back(self):
         """后退"""
-        if self.can_go_back():
-            self.current_index -= 1
-            self.window.load_url(self.history[self.current_index])
-            self.output_history_state()
+        try:
+            if self.can_go_back():
+                self.current_index -= 1
+                url = self.history[self.current_index]
+                print(f"GO_BACK -> loading {url}", flush=True)
+                self.window.load_url(url)
+                self.output_history_state()
+        except Exception:
+            print("GO_BACK_ERROR:" + traceback.format_exc(), flush=True)
 
     def go_forward(self):
         """前进"""
-        if self.can_go_forward():
-            self.current_index += 1
-            self.window.load_url(self.history[self.current_index])
-            self.output_history_state()
+        try:
+            if self.can_go_forward():
+                self.current_index += 1
+                url = self.history[self.current_index]
+                print(f"GO_FORWARD -> loading {url}", flush=True)
+                self.window.load_url(url)
+                self.output_history_state()
+        except Exception:
+            print("GO_FORWARD_ERROR:" + traceback.format_exc(), flush=True)
 
     def reload(self):
         """刷新页面"""
-        if self.current_index >= 0:
-            print("Reloading")
-            self.window.load_url(self.history[self.current_index])
+        try:
+            if 0 <= self.current_index < len(self.history):
+                print("Reloading", flush=True)
+                self.window.load_url(self.history[self.current_index])
+            else:
+                # 没有历史时尝试直接刷新当前窗口
+                try:
+                    self.window.reload()
+                except Exception:
+                    # 如果 reload 不存在，则尝试取当前 url 再 load
+                    try:
+                        cur = getattr(self.window, "url", "") or ""
+                        if cur:
+                            self.window.load_url(cur)
+                    except Exception:
+                        pass
+        except Exception:
+            print("RELOAD_ERROR:" + traceback.format_exc(), flush=True)
 
     def run_js(self, script, callback_id):
-        """执行JavaScript"""
+        """执行JavaScript（可扩展）"""
         try:
+            # 如果底层支持 evaluate_js，可以在这里调用并回调 handle_js_result
             # self.window.evaluate_js(script, lambda result: self.handle_js_result(result, callback_id))
-            pass
+            print(f"RUN_JS_REQUEST:{callback_id}:{script}", flush=True)
         except Exception as e:
             print(f"JS_ERROR:{callback_id}:{str(e)}", flush=True)
 
     def handle_js_result(self, result, callback_id):
         """处理JavaScript执行结果"""
-        print(f"JS_RESULT:{callback_id}:{json.dumps(result)}", flush=True)
+        try:
+            print(f"JS_RESULT:{callback_id}:{json.dumps(result)}", flush=True)
+        except Exception:
+            print(f"JS_RESULT:{callback_id}:<non-json-result>", flush=True)
 
 
 def read_commands(manager):
     while True:
         try:
-            line = sys.stdin.readline().strip()
-            if not line:
+            raw = sys.stdin.readline()
+            if raw == '':
+                print("STDIN_EOF", flush=True)
                 break
+            line = raw.strip()
+            print(f"CMD_RECEIVED:{line}", flush=True)
 
-            if line == "reload":
+            if not line:
+                continue
+
+            if line in ("reload", "refresh"):
                 manager.reload()
-            elif line == "back":
+            elif line in ("back", "go_back"):
                 manager.go_back()
-            elif line == "forward":
+            elif line in ("forward", "go_forward"):
                 manager.go_forward()
+            elif line.startswith("load:"):
+                try:
+                    url = line.split(":", 1)[1]
+                    manager.window.load_url(url)
+                except Exception:
+                    print("LOAD_ERROR:" + traceback.format_exc(), flush=True)
+            elif line == "get_history_state":
+                manager.output_history_state()
             elif line.startswith("run_js:"):
-                parts = line.split(":", 2)
-                if len(parts) == 3:
-                    callback_id = parts[1]
-                    js_script = parts[2]
-                    manager.run_js(js_script, callback_id)
-        except Exception as e:
-            print(f"COMMAND_ERROR:{str(e)}", flush=True)
+                try:
+                    parts = line.split(":", 2)
+                    if len(parts) == 3:
+                        callback_id = parts[1]
+                        js_script = parts[2]
+                        manager.run_js(js_script, callback_id)
+                except Exception:
+                    print("RUN_JS_PARSE_ERROR:" + traceback.format_exc(), flush=True)
+            elif line == "destroy":
+                manager.window.destroy()
+            else:
+                print(f"UNKNOWN_CMD:{line}", flush=True)
+
+        except Exception:
+            print("COMMAND_ERROR:" + traceback.format_exc(), flush=True)
 
 
 def main():
@@ -125,8 +211,9 @@ def main():
     t = threading.Thread(target=read_commands, args=(manager,), daemon=True)
     t.start()
 
-    # start 必须在主线程，这里是独立进程，没问题
+    # start 必须在主线程
     webview.start(debug=False)
+
 
 
 if __name__ == "__main__":

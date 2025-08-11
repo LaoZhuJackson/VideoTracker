@@ -38,7 +38,7 @@ class Config(QConfig):
 
 
     # browser window
-    defaultPageUrl = ConfigItem("browser", "defaultPageUrl", "https://www.baidu.com")
+    defaultPageUrl = ConfigItem("browser", "defaultPageUrl", "https://www.bilibili.com")
     # main window
     micaEnabled = ConfigItem("MainWindow", "MicaEnabled", isWin11(), BoolValidator())
     dpiScale = OptionsConfigItem(

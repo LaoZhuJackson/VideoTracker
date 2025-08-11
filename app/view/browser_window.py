@@ -3,7 +3,7 @@ import re
 import sys
 from ctypes import wintypes
 
-from PyQt5.QtCore import QUrl, Qt, pyqtSlot, QTimer
+from PyQt5.QtCore import QUrl, Qt, pyqtSlot, QTimer, QEvent
 from PyQt5.QtMultimedia import QMediaContent
 from PyQt5.QtWidgets import QFrame
 
@@ -23,6 +23,9 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.setObjectName(text.replace(' ', '-'))
         self.parent = parent
 
+        self.can_back = False
+        self.can_forward = False
+
         self.default_url = config.defaultPageUrl.value
 
         self._initManager()
@@ -39,6 +42,7 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.ToolButton_forward.setIcon(FIF.PAGE_RIGHT)
         self.ToolButton_refresh.setIcon(FIF.SYNC)
         self.ToggleToolButton_pin.setIcon(FIF.PIN)
+        self.ToolButton_refresh.setEnabled(False)
 
         self.ToolButton_refresh.setShortcut("F5")  # 标准刷新快捷键
         self.SearchLineEdit.searchButton.setShortcut("Return")
@@ -46,6 +50,7 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.ToolButton_forward.setShortcut("Alt+Right")  # 浏览器标准前进快捷键
 
         self.SearchLineEdit.setPlaceholderText("输入网址")
+        # self.SearchLineEdit.installEventFilter(self)
         self.web_view = WebView2Widget(self)
         self.gridLayout.addWidget(self.web_view, 1, 0, 1, 5)
         self.web_view.start_webview(url=self.default_url)
@@ -61,8 +66,8 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.web_view.history_state_changed.connect(self.update_tool_button_enable)
         self.web_view.navigation_completed.connect(self._update_url_display)
 
-        self.ToolButton_back.clicked.connect(self.on_back_click)
-        self.ToolButton_forward.clicked.connect(self.on_forward_click)
+        self.ToolButton_back.clicked.connect(self.web_view.go_back)
+        self.ToolButton_forward.clicked.connect(self.web_view.go_forward)
         self.ToolButton_refresh.clicked.connect(self.web_view.reload)
 
         self.ToggleToolButton_pin.toggled.connect(self.toggle_pin)
@@ -76,6 +81,7 @@ class BrowserWindow(QFrame, Ui_Browser):
         # final_url = self.web_view.url()
         # 显示URL
         # display_url = final_url.toString()
+        self.ToolButton_refresh.setEnabled(True)
         self.SearchLineEdit.setText(url)
 
     def on_webview_initialized(self):
@@ -84,40 +90,19 @@ class BrowserWindow(QFrame, Ui_Browser):
             self.web_view.load(self.default_url)  # 加载网页
 
     def on_search_click(self, url):
-        # 去除首尾空格
         url = url.strip()
-        # 空输入处理
-        if not url or not self.web_view.webview:
+        if not url:
             return
-        # 处理特殊格式
         if '.' not in url and 'localhost' not in url:
             url = 'https://www.baidu.com/s?ie=UTF-8&wd=' + url
-            self.web_view.load(url)
-            self.ToolButton_back.setEnabled(True)
-            return
-        # 自动补全协议
-        if not re.match(r'^https?://', url, re.I):
+        elif not re.match(r'^https?://', url, re.I):
             url = 'https://' + url
         self.web_view.load(url)
-        self.update_tool_button_enable()
 
-    @pyqtSlot(bool, bool)
-    def update_tool_button_enable(self, can_go_back, can_go_forward):
+    def update_tool_button_enable(self, can_go_back=None, can_go_forward=None):
         """更新工具栏按钮状态"""
         self.ToolButton_back.setEnabled(can_go_back)
         self.ToolButton_forward.setEnabled(can_go_forward)
-
-    def on_back_click(self):
-        """后退按钮绑定函数"""
-        if self.web_view.history().canGoBack():
-            self.web_view.back()
-        self.update_tool_button_enable()
-
-    def on_forward_click(self):
-        """前进按钮绑定函数"""
-        if self.web_view.history().canGoForward():
-            self.web_view.forward()
-        self.update_tool_button_enable()
 
     def toggle_pin(self, checked):
         try:

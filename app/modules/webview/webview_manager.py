@@ -25,6 +25,10 @@ GWL_STYLE = -16
 WS_VISIBLE = 0x10000000
 WS_CHILD = 0x40000000
 WS_OVERLAPPEDWINDOW = 0x00CF0000
+WS_EX_NOACTIVATE = 0x08000000
+
+WS_EX_APPWINDOW = 0x00040000
+GWL_EXSTYLE = -20
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
@@ -92,18 +96,22 @@ class WebView2Widget(QWidget):
         if self.child_proc and self.child_proc.poll() is None:
             return  # 已运行
 
-        host_hwnd = int(self.embed_area.winId())  # 获取 embed_area HWND
         cmd = [sys.executable, CHILD_PY, title, url]
+        # 添加启动信息参数，告诉子进程不要激活窗口
+        startupinfo = subprocess.STARTUPINFO()
         # 使用stdin/stdout管道进行通信
         self.child_proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
+            encoding='utf-8',  # 强制用 UTF-8 解码
+            errors='replace',  # 遇到非法字节替换
             bufsize=1,  # 行缓冲
-            universal_newlines=True
+            universal_newlines=True,
         )
+        print(f"PARENT: started child pid={self.child_proc.pid}", flush=True)
         # 启动stdout读取线程
         self.start_stdout_reader()
 
@@ -119,9 +127,15 @@ class WebView2Widget(QWidget):
         """读取子进程的stdout输出"""
         while self.child_proc and self.child_proc.poll() is None:
             try:
-                line = self.child_proc.stdout.readline().strip()
+                raw = self.child_proc.stdout.readline()
+                if raw is None:
+                    continue
+                line = raw.strip()
                 if not line:
                     continue
+
+                # debug: 打印所有原始输出
+                print(f"PARENT: CHILD_STDOUT_RAW: {repr(line)}", flush=True)
 
                 # 处理历史状态更新
                 if line.startswith("HISTORY_STATE:"):
@@ -133,9 +147,8 @@ class WebView2Widget(QWidget):
                             state.get("can_go_forward", False)
                         )
                     except Exception as e:
-                        print(f"Error parsing history state: {e}")
+                        print(f"PARENT: Error parsing history state: {e}", flush=True)
 
-                # 处理JS执行结果
                 elif line.startswith("JS_RESULT:"):
                     parts = line.split(":", 2)
                     if len(parts) == 3:
@@ -147,7 +160,6 @@ class WebView2Widget(QWidget):
                         except:
                             self.js_result_received.emit(callback_id, result_str)
 
-                # 处理JS错误
                 elif line.startswith("JS_ERROR:"):
                     parts = line.split(":", 2)
                     if len(parts) == 3:
@@ -155,18 +167,21 @@ class WebView2Widget(QWidget):
                         error = parts[2]
                         self.js_result_received.emit(callback_id, Exception(error))
 
-                # 处理导航完成事件
                 elif line.startswith("Navigation completed:"):
                     url = line[len("Navigation completed:"):].strip()
                     self.navigation_completed.emit(url)
 
+                # 其他调试输出（例如 CMD_RECEIVED 会从子进程 echo 回来）
+                # 这里已被打印为 CHILD_STDOUT_RAW
+
             except Exception as e:
-                print(f"Error reading stdout: {e}")
+                print(f"PARENT: Error reading stdout: {e}", flush=True)
                 break
 
     def close_webview(self):
         """关闭WebView"""
         if self.child_proc and self.child_proc.poll() is None:
+            self.send_command("destroy")
             self.child_proc.terminate()
             try:
                 self.child_proc.wait(timeout=3)
@@ -189,6 +204,17 @@ class WebView2Widget(QWidget):
             self.embed_area.show()  # 嵌入完成再显示
 
     def _embed_hwnd(self, child_hwnd):
+        def translate_to_specific_window(hwnd, target_hwnd):
+            # 将焦点转移到另一个窗口（例如父窗口）
+            user32.SetFocus(target_hwnd)
+
+            # 设置Z序确保焦点转移成功
+            user32.SetWindowPos(
+                hwnd,
+                target_hwnd,  # 放在目标窗口下方
+                0, 0, 0, 0,
+                0x0001 | 0x0002 | 0x0010  # SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            )
         host_hwnd = int(self.embed_area.winId())
 
         # 修改窗口样式
@@ -198,10 +224,32 @@ class WebView2Widget(QWidget):
 
         # 设置父窗口
         SetParent(child_hwnd, host_hwnd)
+        # 将焦点转移到父窗口句柄
+        translate_to_specific_window(child_hwnd, host_hwnd)
 
         # 调整初始大小
         self.resize_child_window()
         self.embed_area.installEventFilter(self)
+
+    # 在 WebView2Widget 类中添加
+    def set_focus_state(self, focus):
+        """控制窗口的焦点状态"""
+        if not self.child_hwnd or not IsWindow(self.child_hwnd):
+            return
+
+        if focus:
+            # 允许获取焦点
+            ex_style = GetWindowLongW(self.child_hwnd, GWL_EXSTYLE)
+            new_ex_style = ex_style & ~WS_EX_NOACTIVATE
+            SetWindowLongW(self.child_hwnd, GWL_EXSTYLE, new_ex_style)
+            user32.SetFocus(self.child_hwnd)
+        else:
+            # 禁止获取焦点
+            ex_style = GetWindowLongW(self.child_hwnd, GWL_EXSTYLE)
+            new_ex_style = ex_style | WS_EX_NOACTIVATE
+            SetWindowLongW(self.child_hwnd, GWL_EXSTYLE, new_ex_style)
+            user32.SetActiveWindow(0)
+            user32.SetFocus(0)
 
     def resize_child_window(self):
         """调整子窗口大小匹配嵌入区域"""
@@ -232,23 +280,35 @@ class WebView2Widget(QWidget):
 
     def send_command(self, command):
         """向子进程发送命令"""
-        if self.child_proc and self.child_proc.poll() is None:
-            try:
-                self.child_proc.stdin.write(command + "\n")
-                self.child_proc.stdin.flush()
-            except Exception as e:
-                print(f"Error sending command: {e}")
+        if not self.child_proc:
+            print("PARENT: send_command called but child_proc is None", flush=True)
+            return
+
+        if self.child_proc.poll() is not None:
+            print(f"PARENT: child process already exited (rc={self.child_proc.poll()})", flush=True)
+            return
+
+        if not self.child_proc.stdin:
+            print("PARENT: child_proc.stdin is None", flush=True)
+            return
+
+        try:
+            print(f"PARENT: SENDING_CMD:{command}", flush=True)
+            self.child_proc.stdin.write(command + "\n")
+            self.child_proc.stdin.flush()
+        except Exception as e:
+            print(f"PARENT: Error sending command: {e}", flush=True)
 
     def on_navigation_completed(self, args):
         pass
 
     def go_back(self):
         """后退"""
-        self.send_command("go_back")
+        self.send_command("back")
 
     def go_forward(self):
         """前进"""
-        self.send_command("go_forward")
+        self.send_command("forward")
 
     def reload(self):
         """刷新页面"""
@@ -257,8 +317,7 @@ class WebView2Widget(QWidget):
 
     def load(self, url):
         """加载指定URL"""
-        # 这个功能需要修改child_webview.py支持，暂时不实现
-        pass
+        self.send_command(f"load:{url}")
 
     def run_js(self, script):
         """执行JavaScript代码"""
