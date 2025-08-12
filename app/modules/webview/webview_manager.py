@@ -63,6 +63,8 @@ class WebView2Widget(QWidget):
     navigation_completed = pyqtSignal(str)
     history_state_changed = pyqtSignal(bool, bool)
     js_result_received = pyqtSignal(str, object)
+    # 添加新信号
+    webview_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -126,7 +128,7 @@ class WebView2Widget(QWidget):
         self.reader_thread.start()
 
     def read_stdout(self):
-        """读取子进程的stdout输出"""
+        """线程中循环读取子进程的stdout输出，实现父进程响应子进程"""
         while self.child_proc and self.child_proc.poll() is None:
             try:
                 raw = self.child_proc.stdout.readline()
@@ -138,6 +140,10 @@ class WebView2Widget(QWidget):
 
                 # debug: 打印所有原始输出
                 print(f"PARENT: CHILD_STDOUT_RAW: {repr(line)}", flush=True)
+
+                # 添加点击消息处理
+                if line == "WEBVIEW_CLICKED":
+                    self.webview_clicked.emit()
 
                 # 处理历史状态更新
                 if line.startswith("HISTORY_STATE:"):

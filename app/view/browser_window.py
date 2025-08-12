@@ -56,7 +56,6 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.web_view.start_webview(url=self.default_url)
 
         self.SearchLineEdit.installEventFilter(self)
-        self.web_view.installEventFilter(self)
 
     def _connect_to_slot(self):
         self.SearchLineEdit.searchSignal.connect(self.on_search_click)
@@ -64,6 +63,7 @@ class BrowserWindow(QFrame, Ui_Browser):
         # 连接信号
         self.web_view.history_state_changed.connect(self.update_tool_button_enable)
         self.web_view.navigation_completed.connect(self._update_url_display)
+        self.web_view.webview_clicked.connect(self.SearchLineEdit.clearFocus)
 
         self.ToolButton_back.clicked.connect(self.web_view.go_back)
         self.ToolButton_forward.clicked.connect(self.web_view.go_forward)
@@ -184,14 +184,10 @@ class BrowserWindow(QFrame, Ui_Browser):
     def eventFilter(self, obj, event):
         """处理搜索框的焦点事件"""
         if obj is self.SearchLineEdit and event.type() == QEvent.FocusIn:
-            print("进入")
+            # print("进入")
             parent_hwnd = self.web_view.parent_hwnd
             child_hwnd = self.web_view.child_hwnd
             set_focus_state(child_hwnd, False)
-        print(obj)
-        if not obj == self.SearchLineEdit and event.type() == QEvent.MouseButtonPress:
-            print("退出")
-            self.SearchLineEdit.clearFocus()
         return super().eventFilter(obj, event)
 
 

@@ -44,7 +44,8 @@ class WebViewManager:
                     url = first
                 else:
                     # 可能传的是 window 对象或类似结构，尝试取属性
-                    url = getattr(first, "url", None) or getattr(first, "href", None) or getattr(first, "location", None)
+                    url = getattr(first, "url", None) or getattr(first, "href", None) or getattr(first, "location",
+                                                                                                 None)
 
             # 最后尝试从 self.window 取当前 url（某些后端支持）
             if not url:
@@ -73,6 +74,13 @@ class WebViewManager:
 
         # 添加 JS 注入
         inject_js = """
+        // 监听整个文档的点击事件
+        document.addEventListener('click', function(e) {
+            // 通知父进程点击事件
+            window.pywebview.api.webview_clicked();
+        }, true);
+
+        // 原有的链接点击处理
         document.addEventListener('click', function(e) {
             let target = e.target;
             while (target && target.tagName !== 'A') {
@@ -209,7 +217,10 @@ def read_commands(manager):
         except Exception:
             print("COMMAND_ERROR:" + traceback.format_exc(), flush=True)
 
+
 class ApiBridge:
+    """向外暴露的api接口，与js通信"""
+
     def __init__(self, manager):
         self.manager = manager
 
@@ -217,6 +228,8 @@ class ApiBridge:
         print(f"LINK_CLICKED:{url}", flush=True)
         # 直接覆盖当前页面
         self.manager.window.load_url(url)
+    def webview_clicked(self):
+        print("WEBVIEW_CLICKED", flush=True)
 
 
 def main():
@@ -231,7 +244,8 @@ def main():
     manager = WebViewManager(window)
 
     api = ApiBridge(manager)
-    window.expose(api.link_clicked)
+    window.expose(api.link_clicked)  # js实现原地跳转
+    window.expose(api.webview_clicked)  # js实现点击webview取消搜索框的聚焦
 
     # 启动命令读取线程
     t = threading.Thread(target=read_commands, args=(manager,), daemon=True)
