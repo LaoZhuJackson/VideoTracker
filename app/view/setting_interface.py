@@ -15,6 +15,7 @@ from ..common.config import config, isWin11
 from ..common.setting import HELP_URL, FEEDBACK_URL, AUTHOR, VERSION, YEAR
 from ..common.signal_bus import signalBus
 from ..common.style_sheet import StyleSheet
+from ..repackge.text_edit_card import TextEditCard
 
 
 class SettingCardGroup(CardGroup):
@@ -22,7 +23,6 @@ class SettingCardGroup(CardGroup):
    def __init__(self, title: str, parent=None):
        super().__init__(title, parent)
        setFont(self.titleLabel, 14, QFont.Weight.DemiBold)
-
 
 
 class SettingInterface(ScrollArea):
@@ -68,14 +68,22 @@ class SettingInterface(ScrollArea):
             ],
             parent=self.personalGroup
         )
-        self.languageCard = ComboBoxSettingCard(
-            config.language,
-            FIF.LANGUAGE,
-            self.tr('Language'),
-            self.tr('Set your preferred language for UI'),
-            texts=['简体中文', '繁體中文', 'English', self.tr('Use system setting')],
-            parent=self.personalGroup
+        self.defaultUrlCard = TextEditCard(
+            config.defaultPageUrl,
+            FIF.GLOBE,
+            '初始页面',
+            "如‘https://www.bilibili.com’",
+            '启动软件时打开的初始页面，需要填入完整的链接地址，如“https://www.bilibili.com”',
+            self.personalGroup
         )
+        # self.languageCard = ComboBoxSettingCard(
+        #     config.language,
+        #     FIF.LANGUAGE,
+        #     self.tr('Language'),
+        #     self.tr('Set your preferred language for UI'),
+        #     texts=['简体中文', '繁體中文', 'English', self.tr('Use system setting')],
+        #     parent=self.personalGroup
+        # )
 
         # update software
         self.updateSoftwareGroup = SettingCardGroup(
@@ -144,7 +152,8 @@ class SettingInterface(ScrollArea):
         self.personalGroup.addSettingCard(self.micaCard)
         self.personalGroup.addSettingCard(self.themeCard)
         self.personalGroup.addSettingCard(self.zoomCard)
-        self.personalGroup.addSettingCard(self.languageCard)
+        self.personalGroup.addSettingCard(self.defaultUrlCard)
+        # self.personalGroup.addSettingCard(self.languageCard)
 
         self.updateSoftwareGroup.addSettingCard(self.updateOnStartUpCard)
 

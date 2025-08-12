@@ -5,7 +5,7 @@ from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QIcon, QColor
 from PyQt5.QtWidgets import QApplication
 
-from qfluentwidgets import SplashScreen
+from qfluentwidgets import SplashScreen, setThemeColor
 from qfluentwidgets import FluentIcon as FIF
 
 from .browser_window import BrowserWindow
@@ -55,6 +55,7 @@ class MainWindow(MyMainWindow):
 
         self.setCustomBackgroundColor(QColor(240, 244, 249), QColor(32, 32, 32))
         self.setMicaEffectEnabled(config.get(config.micaEnabled))
+        setThemeColor("#2D527C")
 
         # create splash screen
         self.splashScreen = SplashScreen(self.windowIcon(), self)
