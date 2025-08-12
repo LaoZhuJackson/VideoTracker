@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -251,8 +252,10 @@ def main():
     t = threading.Thread(target=read_commands, args=(manager,), daemon=True)
     t.start()
 
-    # start 必须在主线程
-    webview.start(debug=False)
+    data_dir = project_root / "AppData" / "webview_data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    # start 必须在主线程,private_mode=False保证存cookies
+    webview.start(debug=False, private_mode=False, storage_path=str(data_dir))
 
 
 if __name__ == "__main__":

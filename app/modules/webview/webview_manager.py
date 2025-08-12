@@ -190,7 +190,7 @@ class WebView2Widget(QWidget):
         """关闭WebView"""
         if self.child_proc and self.child_proc.poll() is None:
             self.send_command("destroy")
-            self.child_proc.terminate()
+            # self.child_proc.terminate()
             try:
                 self.child_proc.wait(timeout=3)
             except Exception:
