@@ -62,6 +62,24 @@ class WebViewManager:
         except Exception:
             print("NAV_ON_COMPLETED_ERROR:" + traceback.format_exc(), flush=True)
 
+        # 添加 JS 注入
+        inject_js = """
+        document.addEventListener('click', function(e) {
+            let target = e.target;
+            while (target && target.tagName !== 'A') {
+                target = target.parentElement;
+            }
+            if (target && target.tagName === 'A' && target.href) {
+                e.preventDefault();
+                window.pywebview.api.link_clicked(target.href);
+            }
+        }, true);
+        """
+        try:
+            self.window.evaluate_js(inject_js)
+        except Exception as e:
+            print(f"INJECT_JS_ERROR: {e}", flush=True)
+
     def output_history_state(self):
         """输出历史状态到stdout（安全）"""
         try:
@@ -116,21 +134,8 @@ class WebViewManager:
     def reload(self):
         """刷新页面"""
         try:
-            if 0 <= self.current_index < len(self.history):
-                print("Reloading", flush=True)
-                self.window.load_url(self.history[self.current_index])
-            else:
-                # 没有历史时尝试直接刷新当前窗口
-                try:
-                    self.window.reload()
-                except Exception:
-                    # 如果 reload 不存在，则尝试取当前 url 再 load
-                    try:
-                        cur = getattr(self.window, "url", "") or ""
-                        if cur:
-                            self.window.load_url(cur)
-                    except Exception:
-                        pass
+            print(f"Reloading:{self.history[self.current_index]}", flush=True)
+            self.window.evaluate_js("location.reload(true);")
         except Exception:
             print("RELOAD_ERROR:" + traceback.format_exc(), flush=True)
 
@@ -195,6 +200,15 @@ def read_commands(manager):
         except Exception:
             print("COMMAND_ERROR:" + traceback.format_exc(), flush=True)
 
+class ApiBridge:
+    def __init__(self, manager):
+        self.manager = manager
+
+    def link_clicked(self, url):
+        print(f"LINK_CLICKED:{url}", flush=True)
+        # 直接覆盖当前页面
+        self.manager.window.load_url(url)
+
 
 def main():
     if len(sys.argv) < 3:
@@ -207,13 +221,15 @@ def main():
     window = webview.create_window(title, url, frameless=False)
     manager = WebViewManager(window)
 
+    api = ApiBridge(manager)
+    window.expose(api.link_clicked)
+
     # 启动命令读取线程
     t = threading.Thread(target=read_commands, args=(manager,), daemon=True)
     t.start()
 
     # start 必须在主线程
     webview.start(debug=False)
-
 
 
 if __name__ == "__main__":
