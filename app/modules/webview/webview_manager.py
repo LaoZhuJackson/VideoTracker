@@ -4,7 +4,12 @@ import subprocess
 import ctypes
 import uuid
 from ctypes import wintypes
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel
+import win32con
+import win32api
+import win32gui
+
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QShortcut
 from PyQt5.QtCore import QTimer, Qt, QRect, pyqtSignal, QEvent
 
 from app.common.utils import translate_to_specific_window, set_focus_state
@@ -30,6 +35,15 @@ WS_EX_NOACTIVATE = 0x08000000
 
 WS_EX_APPWINDOW = 0x00040000
 GWL_EXSTYLE = -20
+
+WM_HOTKEY = 0x0312
+# 定义快捷键ID
+PLAY_PAUSE_ID = 1
+FORWARD_ID = 2
+BACKWARD_ID = 3
+FULLSCREEN_ID = 4
+VOLUME_UP_ID = 5
+VOLUME_DOWN_ID = 6
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
@@ -85,6 +99,12 @@ class WebView2Widget(QWidget):
         self.history_timer.setInterval(500)
         self.history_timer.timeout.connect(self.check_history_state)
 
+        # 注册全局快捷键
+        self._init_global_shortcuts()
+        # 注册系统级全局快捷键
+        if sys.platform == "win32":
+            self._register_global_hotkeys()
+
     def setup_ui(self):
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(0, 0, 0, 0)
@@ -94,6 +114,101 @@ class WebView2Widget(QWidget):
         self.embed_area = QWidget(self)
         self.layout().addWidget(self.embed_area)
         self.embed_area.hide()  # 刚开始隐藏，避免闪
+
+    def _register_global_hotkeys(self):
+        """注册系统级全局快捷键（仅Windows）"""
+        try:
+            # 播放/暂停: Ctrl+Alt+P
+            win32api.RegisterHotKey(
+                int(self.winId()), PLAY_PAUSE_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_P
+            )
+
+            # 快进: Ctrl+Alt+Right
+            win32api.RegisterHotKey(
+                int(self.winId()), FORWARD_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_RIGHT
+            )
+
+            # 快退: Ctrl+Alt+Left
+            win32api.RegisterHotKey(
+                int(self.winId()), BACKWARD_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_LEFT
+            )
+
+            # 全屏: Ctrl+Alt+F
+            win32api.RegisterHotKey(
+                int(self.winId()), FULLSCREEN_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_F
+            )
+
+            # 增加音量: Ctrl+Alt+Up
+            win32api.RegisterHotKey(
+                int(self.winId()), VOLUME_UP_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_UP
+            )
+
+            # 减少音量: Ctrl+Alt+Down
+            win32api.RegisterHotKey(
+                int(self.winId()), VOLUME_DOWN_ID,
+                win32con.MOD_CONTROL | win32con.MOD_ALT,
+                win32con.VK_DOWN
+            )
+        except Exception as e:
+            print(f"Failed to register hotkeys: {e}")
+
+    def nativeEvent(self, eventType, message):
+        """处理Windows原生事件"""
+        print("原生")
+        if sys.platform == "win32":
+            msg = ctypes.wintypes.MSG.from_address(message.__int__())
+            if msg.message == WM_HOTKEY:
+                # 根据热键ID执行相应操作
+                if msg.wParam == PLAY_PAUSE_ID:
+                    self.send_play_pause()
+                elif msg.wParam == FORWARD_ID:
+                    self.send_forward()
+                elif msg.wParam == BACKWARD_ID:
+                    self.send_backward()
+                elif msg.wParam == FULLSCREEN_ID:
+                    self.send_fullscreen()
+                elif msg.wParam == VOLUME_UP_ID:
+                    self.send_volume_up()
+                elif msg.wParam == VOLUME_DOWN_ID:
+                    self.send_volume_down()
+                return True, 0
+        return super().nativeEvent(eventType, message)
+
+    def _init_global_shortcuts(self):
+        """初始化全局快捷键"""
+        # 播放/暂停快捷键 (Ctrl+Alt+P)
+        self.play_pause_shortcut = QShortcut(QKeySequence("Ctrl+Alt+P"), self)
+        self.play_pause_shortcut.activated.connect(self.send_play_pause)
+
+        # 快进快捷键 (Ctrl+Alt+Right)
+        self.forward_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Right"), self)
+        self.forward_shortcut.activated.connect(self.send_forward)
+
+        # 快退快捷键 (Ctrl+Alt+Left)
+        self.backward_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Left"), self)
+        self.backward_shortcut.activated.connect(self.send_backward)
+
+        # 全屏快捷键 (Ctrl+Alt+F)
+        self.fullscreen_shortcut = QShortcut(QKeySequence("Ctrl+Alt+F"), self)
+        self.fullscreen_shortcut.activated.connect(self.send_fullscreen)
+
+        # 音量加
+        self.volume_up_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Up"), self)
+        self.volume_up_shortcut.activated.connect(lambda: self.send_command("video:volume_up"))
+
+        # 音量减
+        self.volume_down_shortcut = QShortcut(QKeySequence("Ctrl+Alt+Down"), self)
+        self.volume_down_shortcut.activated.connect(lambda: self.send_command("video:volume_down"))
 
     def start_webview(self, title=WEBVIEW_TITLE, url="https://www.baidu.com"):
         """启动并嵌入WebView"""
@@ -190,7 +305,7 @@ class WebView2Widget(QWidget):
         """关闭WebView"""
         if self.child_proc and self.child_proc.poll() is None:
             self.send_command("destroy")
-            # self.child_proc.terminate()
+            self.child_proc.terminate()
             try:
                 self.child_proc.wait(timeout=3)
             except Exception:
@@ -261,6 +376,17 @@ class WebView2Widget(QWidget):
 
     def cleanup(self):
         """清理资源"""
+        # 取消注册全局快捷键
+        if sys.platform == "win32":
+            try:
+                win32api.UnregisterHotKey(int(self.winId()), PLAY_PAUSE_ID)
+                win32api.UnregisterHotKey(int(self.winId()), FORWARD_ID)
+                win32api.UnregisterHotKey(int(self.winId()), BACKWARD_ID)
+                win32api.UnregisterHotKey(int(self.winId()), FULLSCREEN_ID)
+                win32api.UnregisterHotKey(int(self.winId()), VOLUME_UP_ID)
+                win32api.UnregisterHotKey(int(self.winId()), VOLUME_DOWN_ID)
+            except:
+                pass
         self.close_webview()
 
     def send_command(self, command):
@@ -315,3 +441,28 @@ class WebView2Widget(QWidget):
         if self.child_proc and self.child_proc.poll() is None:
             # 请求历史状态更新
             self.send_command("get_history_state")
+
+    def send_play_pause(self):
+        """发送播放/暂停命令"""
+        print("播放、暂停")
+        self.send_command("video:play_pause")
+
+    def send_forward(self):
+        """发送快进命令"""
+        self.send_command("video:forward")
+
+    def send_backward(self):
+        """发送快退命令"""
+        self.send_command("video:backward")
+
+    def send_fullscreen(self):
+        """发送全屏命令"""
+        self.send_command("video:fullscreen")
+
+    def send_volume_up(self):
+        """发送音量加命令"""
+        self.send_command("video:volume_up")
+
+    def send_volume_down(self):
+        """发送音量减命令"""
+        self.send_command("video:volume_down")

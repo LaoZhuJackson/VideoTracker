@@ -39,6 +39,9 @@ class Config(QConfig):
 
     # browser window
     defaultPageUrl = ConfigItem("browser", "defaultPageUrl", "https://www.bilibili.com")
+    forward_second = OptionsConfigItem("browser", "forward_second", 3, OptionsValidator([1, 3, 5, 10]))
+    backward_second = OptionsConfigItem("browser", "backward_second", 3, OptionsValidator([1, 3, 5, 10]))
+
     # main window
     micaEnabled = ConfigItem("MainWindow", "MicaEnabled", isWin11(), BoolValidator())
     dpiScale = OptionsConfigItem(
@@ -48,6 +51,13 @@ class Config(QConfig):
 
     # software update
     checkUpdateAtStartUp = ConfigItem("Update", "CheckUpdateAtStartUp", True, BoolValidator())
+    # setting interface
+    playVideoShortcut = ConfigItem("Shortcut", "playVideoShortcut", "Ctrl+Alt+P")
+    forwardVideoShortcut = ConfigItem("Shortcut", "forwardVideoShortcut", "Ctrl+Alt+Right")
+    backwardVideoShortcut = ConfigItem("Shortcut", "backwardVideoShortcut", "Ctrl+Alt+Left")
+    fullscreenShortcut = ConfigItem("Shortcut", "fullscreenShortcut", "Ctrl+Alt+F")
+    volumeUpShortcut = ConfigItem("Shortcut", "volumeUpShortcut", "Ctrl+Alt+Up")
+    volumeDownShortcut = ConfigItem("Shortcut", "volumeDownShortcut", "Ctrl+Alt+Down")
 
 
 config = Config()

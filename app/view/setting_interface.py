@@ -68,14 +68,6 @@ class SettingInterface(ScrollArea):
             ],
             parent=self.personalGroup
         )
-        self.defaultUrlCard = TextEditCard(
-            config.defaultPageUrl,
-            FIF.GLOBE,
-            '初始页面',
-            "如‘https://www.bilibili.com’",
-            '启动软件时打开的初始页面，需要填入完整的链接地址，如“https://www.bilibili.com”',
-            self.personalGroup
-        )
         # self.languageCard = ComboBoxSettingCard(
         #     config.language,
         #     FIF.LANGUAGE,
@@ -84,6 +76,83 @@ class SettingInterface(ScrollArea):
         #     texts=['简体中文', '繁體中文', 'English', self.tr('Use system setting')],
         #     parent=self.personalGroup
         # )
+        self.defaultUrlCard = TextEditCard(
+            config.defaultPageUrl,
+            FIF.GLOBE,
+            '初始页面',
+            "如‘https://www.bilibili.com’",
+            '启动软件时打开的初始页面，需要填入完整的链接地址，如“https://www.bilibili.com”',
+            self.personalGroup
+        )
+
+        self.forwardSecondCard = ComboBoxSettingCard(
+            config.forward_second,
+            FIF.SKIP_FORWARD,
+            self.tr("快进秒数"),
+            self.tr("设置每次快进多少秒"),
+            texts=["1秒", "3秒", "5秒", "10秒"],
+            parent=self.personalGroup
+        )
+        self.backwardSecondCard = ComboBoxSettingCard(
+            config.backward_second,
+            FIF.SKIP_BACK,
+            self.tr("快退秒数"),
+            self.tr("设置每次快退多少秒"),
+            texts=["1秒", "3秒", "5秒", "10秒"],
+            parent=self.personalGroup
+        )
+
+        # 快捷键组
+        self.shortcutGroup = SettingCardGroup(
+            self.tr("快捷键"), self.scrollWidget)
+        self.playVideoCard = TextEditCard(
+            config.playVideoShortcut,
+            FIF.PLAY,
+            '播放/暂停',
+            "",
+            '控制视频的播放和暂停，用“+”隔离按键',
+            self.shortcutGroup
+        )
+        self.forwardVideoCard = TextEditCard(
+            config.forwardVideoShortcut,
+            FIF.PAGE_RIGHT,
+            '快进',
+            "",
+            '控制视频的快进，用“+”隔离按键',
+            self.shortcutGroup
+        )
+        self.backwardVideoCard = TextEditCard(
+            config.backwardVideoShortcut,
+            FIF.PAGE_LEFT,
+            '快退',
+            "",
+            '控制视频的快退，用“+”隔离按键',
+            self.shortcutGroup
+        )
+        self.fullscreenCard = TextEditCard(
+            config.fullscreenShortcut,
+            FIF.FULL_SCREEN,
+            '全屏',
+            "",
+            '使视频填满小窗，用“+”隔离按键',
+            self.shortcutGroup
+        )
+        self.volumeUpCard = TextEditCard(
+            config.volumeUpShortcut,
+            FIF.UP,
+            '增加音量',
+            "",
+            '增大视频播放音量，用“+”隔离按键',
+            self.shortcutGroup
+        )
+        self.volumeDownCard = TextEditCard(
+            config.volumeDownShortcut,
+            FIF.DOWN,
+            '减小音量',
+            "",
+            '减小视频播放音量，用“+”隔离按键',
+            self.shortcutGroup
+        )
 
         # update software
         self.updateSoftwareGroup = SettingCardGroup(
@@ -152,8 +221,17 @@ class SettingInterface(ScrollArea):
         self.personalGroup.addSettingCard(self.micaCard)
         self.personalGroup.addSettingCard(self.themeCard)
         self.personalGroup.addSettingCard(self.zoomCard)
-        self.personalGroup.addSettingCard(self.defaultUrlCard)
         # self.personalGroup.addSettingCard(self.languageCard)
+        self.personalGroup.addSettingCard(self.defaultUrlCard)
+        self.personalGroup.addSettingCard(self.forwardSecondCard)
+        self.personalGroup.addSettingCard(self.backwardSecondCard)
+
+        self.shortcutGroup.addSettingCard(self.playVideoCard)
+        self.shortcutGroup.addSettingCard(self.forwardVideoCard)
+        self.shortcutGroup.addSettingCard(self.backwardVideoCard)
+        self.shortcutGroup.addSettingCard(self.fullscreenCard)
+        self.shortcutGroup.addSettingCard(self.volumeUpCard)
+        self.shortcutGroup.addSettingCard(self.volumeDownCard)
 
         self.updateSoftwareGroup.addSettingCard(self.updateOnStartUpCard)
 
@@ -165,6 +243,7 @@ class SettingInterface(ScrollArea):
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
         self.expandLayout.addWidget(self.personalGroup)
+        self.expandLayout.addWidget(self.shortcutGroup)
         self.expandLayout.addWidget(self.updateSoftwareGroup)
         self.expandLayout.addWidget(self.aboutGroup)
 

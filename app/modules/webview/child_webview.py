@@ -9,6 +9,8 @@ import time
 import traceback
 from pathlib import Path
 
+from app.common.config import config
+
 # 创建固定缓存目录
 project_root = Path.cwd()
 cache_dir = project_root / "AppData" / "webview_cache"
@@ -75,28 +77,116 @@ class WebViewManager:
 
         # 添加 JS 注入
         inject_js = """
-        // 监听整个文档的点击事件
-        document.addEventListener('click', function(e) {
-            // 通知父进程点击事件
-            window.pywebview.api.webview_clicked();
-        }, true);
+        try {
+            // 监听整个文档的点击事件
+            document.addEventListener('click', function(e) {
+                // 排除输入框和可编辑元素的点击
+                const editableTags = ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'];
+                if (!editableTags.includes(e.target.tagName)) {
+                    try {
+                        window.pywebview.api.webview_clicked();
+                    } catch (apiError) {
+                        console.error('Webview clicked API error:', apiError);
+                    }
+                }
+            }, true);
 
-        // 原有的链接点击处理
-        document.addEventListener('click', function(e) {
-            let target = e.target;
-            while (target && target.tagName !== 'A') {
-                target = target.parentElement;
-            }
-            if (target && target.tagName === 'A' && target.href) {
-                e.preventDefault();
-                window.pywebview.api.link_clicked(target.href);
-            }
-        }, true);
+            // 原有的链接点击处理
+            document.addEventListener('click', function(e) {
+                let target = e.target;
+                while (target && target.tagName !== 'A') {
+                    target = target.parentElement;
+                }
+                if (target && target.tagName === 'A' && target.href) {
+                    e.preventDefault();
+                    try {
+                        window.pywebview.api.link_clicked(target.href);
+                    } catch (apiError) {
+                        console.error('Link clicked API error:', apiError);
+                    }
+                }
+            }, true);
+        } catch (globalError) {
+            console.error('Global JS injection error:', globalError);
+        }
         """
         try:
             self.window.evaluate_js(inject_js)
         except Exception as e:
             print(f"INJECT_JS_ERROR: {e}", flush=True)
+
+    def control_video(self, action):
+        """控制视频播放"""
+        print("进入control")
+        try:
+            # 使用JavaScript查找页面中的所有视频元素
+            js_script = f"""
+                    // 获取所有视频元素
+                    const videos = document.getElementsByTagName('video');
+
+                    // 如果没有视频，尝试查找其他播放器
+                    if (videos.length === 0) {{
+                        // 尝试查找YouTube、Bilibili等常见播放器
+                        const players = [
+                            document.querySelector('.html5-main-video'),
+                            document.querySelector('.bilibili-player-video video'),
+                            document.querySelector('.video-player video'),
+                            document.querySelector('#player video')
+                        ].filter(el => el !== null);
+
+                        if (players.length > 0) {{
+                            videos.push(...players);
+                        }}
+                    }}
+
+                    // 执行控制操作
+                    for (const video of videos) {{
+                        try {{
+                            switch('{action}') {{
+                                case 'play_pause':
+                                    if (video.paused) video.play();
+                                    else video.pause();
+                                    break;
+                                case 'forward':
+                                    video.currentTime = Math.min(video.duration, video.currentTime + {config.forward_second.value});
+                                    break;
+                                case 'backward':
+                                    video.currentTime = Math.max(0, video.currentTime - {config.backward_second.value});
+                                    break;
+                                case 'fullscreen':
+                                    if (video.requestFullscreen) {{
+                                        video.requestFullscreen();
+                                    }} else if (video.webkitRequestFullscreen) {{
+                                        video.webkitRequestFullscreen();
+                                    }} else if (video.mozRequestFullScreen) {{
+                                        video.mozRequestFullScreen();
+                                    }} else if (video.msRequestFullscreen) {{
+                                        video.msRequestFullscreen();
+                                    }}
+                                    break;
+                                case 'volume_up':
+                                    video.volume = Math.min(1, video.volume + 0.1);
+                                    break;
+                                case 'volume_down':
+                                    video.volume = Math.max(0, video.volume - 0.1);
+                                    break;
+                            }}
+                        }} catch (e) {{
+                            console.error('Video control error:', e);
+                        }}
+                    }}
+
+                    // 返回控制的视频数量
+                    videos.length;
+                    """
+
+            # 执行JavaScript
+            self.window.evaluate_js(js_script)
+
+            # 记录操作
+            print(f"VIDEO_CONTROL: {action}", flush=True)
+        except Exception as e:
+            print(f"VIDEO_CONTROL_ERROR: {str(e)}", flush=True)
 
     def output_history_state(self):
         """输出历史状态到stdout（安全）"""
@@ -212,6 +302,12 @@ def read_commands(manager):
                     print("RUN_JS_PARSE_ERROR:" + traceback.format_exc(), flush=True)
             elif line == "destroy":
                 manager.window.destroy()
+            elif line.startswith("video:"):
+                try:
+                    action = line.split(":", 1)[1]
+                    manager.control_video(action)
+                except Exception:
+                    print("VIDEO_CMD_ERROR:" + traceback.format_exc(), flush=True)
             else:
                 print(f"UNKNOWN_CMD:{line}", flush=True)
 
@@ -226,11 +322,19 @@ class ApiBridge:
         self.manager = manager
 
     def link_clicked(self, url):
-        print(f"LINK_CLICKED:{url}", flush=True)
-        # 直接覆盖当前页面
-        self.manager.window.load_url(url)
+        try:
+            # 检查窗口是否有效
+            if self.manager.window and hasattr(self.manager.window, 'load_url'):
+                print(f"LINK_CLICKED:{url}", flush=True)
+                self.manager.window.load_url(url)
+        except Exception as e:
+            print(f"LINK_CLICKED_ERROR: {str(e)}", flush=True)
+
     def webview_clicked(self):
-        print("WEBVIEW_CLICKED", flush=True)
+        try:
+            print("WEBVIEW_CLICKED", flush=True)
+        except Exception as e:
+            print(f"WEBVIEW_CLICKED_ERROR: {str(e)}", flush=True)
 
 
 def main():
