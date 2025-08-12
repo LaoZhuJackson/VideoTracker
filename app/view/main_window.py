@@ -1,18 +1,16 @@
 # coding: utf-8
 import time
 
-from PyQt5.QtCore import QUrl, QSize
+from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QIcon, QColor
 from PyQt5.QtWidgets import QApplication
 
-from qfluentwidgets import NavigationItemPosition, SplashScreen
+from qfluentwidgets import SplashScreen
 from qfluentwidgets import FluentIcon as FIF
 
 from .browser_window import BrowserWindow
 from .setting_interface import SettingInterface
-from .video_window import VideoWindow
 from ..common.config import config
-from ..common.icon import Icon
 from ..common.signal_bus import signalBus
 from ..common import resource
 from ..repackge.my_main_window import MyMainWindow
@@ -26,7 +24,6 @@ class MainWindow(MyMainWindow):
 
         # TODO: create sub interface
         self.browserInterface = BrowserWindow('Browser Window', self)
-        self.videoInterface = VideoWindow('Video Window', self)
         self.settingInterface = SettingInterface(self)
 
         self.connectSignalToSlot()
@@ -40,7 +37,6 @@ class MainWindow(MyMainWindow):
     def initNavigation(self):
         # TODO: add navigation items
         self.addSubInterface(self.browserInterface, FIF.GLOBE, "browserInterface")
-        self.addSubInterface(self.videoInterface, FIF.MOVIE, "videoInterface")
 
         # add custom widget to bottom
         self.addSubInterface(
@@ -52,10 +48,10 @@ class MainWindow(MyMainWindow):
         self.splashScreen.finish()
 
     def initWindow(self):
-        self.resize(960, 780)
+        self.resize(1107, 780)
         self.setMinimumWidth(760)
         self.setWindowIcon(QIcon(':/app/images/logo.png'))
-        self.setWindowTitle('PyQt-Fluent-Widgets')
+        self.setWindowTitle('VideoTracker')
 
         self.setCustomBackgroundColor(QColor(240, 244, 249), QColor(32, 32, 32))
         self.setMicaEffectEnabled(config.get(config.micaEnabled))

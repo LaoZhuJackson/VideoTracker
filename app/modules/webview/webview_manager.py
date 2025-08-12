@@ -1,12 +1,13 @@
 import json
 import sys
 import subprocess
-import time
 import ctypes
 import uuid
 from ctypes import wintypes
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import QTimer, Qt, QRect, pyqtSignal, QEvent
+
+from app.common.utils import translate_to_specific_window, set_focus_state
 
 # 需要提前 pip install psutil（可选）
 try:
@@ -68,6 +69,7 @@ class WebView2Widget(QWidget):
         self.setup_ui()
         self.parent = parent
         self.child_proc = None
+        self.parent_hwnd = None
         self.child_hwnd = None
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(100)
@@ -204,17 +206,6 @@ class WebView2Widget(QWidget):
             self.embed_area.show()  # 嵌入完成再显示
 
     def _embed_hwnd(self, child_hwnd):
-        def translate_to_specific_window(hwnd, target_hwnd):
-            # 将焦点转移到另一个窗口（例如父窗口）
-            user32.SetFocus(target_hwnd)
-
-            # 设置Z序确保焦点转移成功
-            user32.SetWindowPos(
-                hwnd,
-                target_hwnd,  # 放在目标窗口下方
-                0, 0, 0, 0,
-                0x0001 | 0x0002 | 0x0010  # SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
-            )
         host_hwnd = int(self.embed_area.winId())
 
         # 修改窗口样式
@@ -224,32 +215,14 @@ class WebView2Widget(QWidget):
 
         # 设置父窗口
         SetParent(child_hwnd, host_hwnd)
+        self.parent_hwnd = host_hwnd
         # 将焦点转移到父窗口句柄
         translate_to_specific_window(child_hwnd, host_hwnd)
 
+        self.embed_area.installEventFilter(self)
+        set_focus_state(child_hwnd, False)
         # 调整初始大小
         self.resize_child_window()
-        self.embed_area.installEventFilter(self)
-
-    # 在 WebView2Widget 类中添加
-    def set_focus_state(self, focus):
-        """控制窗口的焦点状态"""
-        if not self.child_hwnd or not IsWindow(self.child_hwnd):
-            return
-
-        if focus:
-            # 允许获取焦点
-            ex_style = GetWindowLongW(self.child_hwnd, GWL_EXSTYLE)
-            new_ex_style = ex_style & ~WS_EX_NOACTIVATE
-            SetWindowLongW(self.child_hwnd, GWL_EXSTYLE, new_ex_style)
-            user32.SetFocus(self.child_hwnd)
-        else:
-            # 禁止获取焦点
-            ex_style = GetWindowLongW(self.child_hwnd, GWL_EXSTYLE)
-            new_ex_style = ex_style | WS_EX_NOACTIVATE
-            SetWindowLongW(self.child_hwnd, GWL_EXSTYLE, new_ex_style)
-            user32.SetActiveWindow(0)
-            user32.SetFocus(0)
 
     def resize_child_window(self):
         """调整子窗口大小匹配嵌入区域"""
@@ -264,8 +237,14 @@ class WebView2Widget(QWidget):
             )
 
     def eventFilter(self, source, event):
-        if source is self.embed_area and event.type() == QEvent.Resize:
-            self.resize_child_window()
+        if source is self.embed_area:
+            if event.type() == QEvent.Resize:
+                self.resize_child_window()
+            # 添加焦点处理
+            # elif source is self.embed_area and event.type() == QEvent.FocusIn:
+            #     set_focus_state(self.parent_hwnd, False)
+            # elif event.type() == QEvent.FocusOut:
+            #     set_focus_state(self.child_hwnd, False)
         return super().eventFilter(source, event)
 
     def showEvent(self, event):

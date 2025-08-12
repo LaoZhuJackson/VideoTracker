@@ -159,5 +159,5 @@ class MyMainWindow(BackgroundAnimationWidget, FramelessWindow):
             titleBar.closeBtn.hide()
 
     def resizeEvent(self, e):
-        self.titleBar.move(5, 0)
-        self.titleBar.resize(self.width()-5, self.titleBar.height())
+        self.titleBar.move(10, 0)
+        self.titleBar.resize(self.width()-10, self.titleBar.height())

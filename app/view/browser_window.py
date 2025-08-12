@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QFrame
 
 from app.common.config import config
 from app.common.signal_bus import signalBus
+from app.common.utils import translate_to_specific_window, set_focus_state
 from app.modules.webview.webview_manager import WebView2Widget
 # from app.repackge.my_web_engine_view import SinglePageWebEngineView
 from app.ui.BrowserWindow import Ui_Browser
@@ -50,16 +51,14 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.ToolButton_forward.setShortcut("Alt+Right")  # 浏览器标准前进快捷键
 
         self.SearchLineEdit.setPlaceholderText("输入网址")
-        # self.SearchLineEdit.installEventFilter(self)
         self.web_view = WebView2Widget(self)
         self.gridLayout.addWidget(self.web_view, 1, 0, 1, 5)
         self.web_view.start_webview(url=self.default_url)
 
-    def _connect_to_slot(self):
-        # 连接信号，在页面加载完成后更新地址栏
-        # self.web_view.urlChanged.connect(self._update_url_display)
-        # self.web_view.loadFinished.connect(self.check_for_video)
+        self.SearchLineEdit.installEventFilter(self)
+        self.web_view.installEventFilter(self)
 
+    def _connect_to_slot(self):
         self.SearchLineEdit.searchSignal.connect(self.on_search_click)
 
         # 连接信号
@@ -178,34 +177,22 @@ class BrowserWindow(QFrame, Ui_Browser):
         self.parent.activateWindow()
         self.parent.raise_()
 
-    @pyqtSlot()
-    async def check_for_video(self):
-        js_code = """
-            (function() {
-                var video = document.querySelector("video");
-                if (video) {
-                    if (video.src) {
-                        return video.src;
-                    } else if (video.querySelector("source")) {
-                        return video.querySelector("source").src;
-                    }
-                }
-                return null;
-            })();
-        """
-        url = await self.web_view.run_js(js_code)
-        self.handle_video_url(url)
-
-    def handle_video_url(self, url):
-        if url:
-            print("检测到视频地址：", url)
-            signalBus.getVideoUrl.emit(url)
-        else:
-            print("未检测到视频标签")
-
     def closeEvent(self, a0):
         self.web_view.cleanup()
         super().closeEvent(a0)
+
+    def eventFilter(self, obj, event):
+        """处理搜索框的焦点事件"""
+        if obj is self.SearchLineEdit and event.type() == QEvent.FocusIn:
+            print("进入")
+            parent_hwnd = self.web_view.parent_hwnd
+            child_hwnd = self.web_view.child_hwnd
+            set_focus_state(child_hwnd, False)
+        print(obj)
+        if not obj == self.SearchLineEdit and event.type() == QEvent.MouseButtonPress:
+            print("退出")
+            self.SearchLineEdit.clearFocus()
+        return super().eventFilter(obj, event)
 
 
 
