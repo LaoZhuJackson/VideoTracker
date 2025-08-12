@@ -4,6 +4,8 @@ import subprocess
 import ctypes
 import uuid
 from ctypes import wintypes
+
+import keyboard
 import win32con
 import win32api
 import win32gui
@@ -100,10 +102,11 @@ class WebView2Widget(QWidget):
         self.history_timer.timeout.connect(self.check_history_state)
 
         # 注册全局快捷键
-        self._init_global_shortcuts()
+        # self._init_global_shortcuts()
         # 注册系统级全局快捷键
-        if sys.platform == "win32":
-            self._register_global_hotkeys()
+        # if sys.platform == "win32":
+        #     self._register_global_hotkeys()
+        self._init_global_shortcuts()
 
     def setup_ui(self):
         self.setLayout(QVBoxLayout())
@@ -114,6 +117,23 @@ class WebView2Widget(QWidget):
         self.embed_area = QWidget(self)
         self.layout().addWidget(self.embed_area)
         self.embed_area.hide()  # 刚开始隐藏，避免闪
+
+    def _init_global_shortcuts(self):
+        """初始化全局快捷键（跨平台）"""
+        try:
+            # 播放/暂停快捷键 (Ctrl+Alt+P)
+            keyboard.add_hotkey('ctrl+alt+p', self.send_play_pause)
+
+            # 快进快捷键 (Ctrl+Alt+Right)
+            keyboard.add_hotkey('ctrl+alt+right', self.send_forward)
+
+            # 快退快捷键 (Ctrl+Alt+Left)
+            keyboard.add_hotkey('ctrl+alt+left', self.send_backward)
+
+            # 全屏快捷键 (Ctrl+Alt+F)
+            keyboard.add_hotkey('ctrl+alt+f', self.send_fullscreen)
+        except Exception as e:
+            print(f"Failed to register hotkeys: {e}")
 
     def _register_global_hotkeys(self):
         """注册系统级全局快捷键（仅Windows）"""
@@ -164,7 +184,6 @@ class WebView2Widget(QWidget):
 
     def nativeEvent(self, eventType, message):
         """处理Windows原生事件"""
-        print("原生")
         if sys.platform == "win32":
             msg = ctypes.wintypes.MSG.from_address(message.__int__())
             if msg.message == WM_HOTKEY:
@@ -377,16 +396,23 @@ class WebView2Widget(QWidget):
     def cleanup(self):
         """清理资源"""
         # 取消注册全局快捷键
-        if sys.platform == "win32":
-            try:
-                win32api.UnregisterHotKey(int(self.winId()), PLAY_PAUSE_ID)
-                win32api.UnregisterHotKey(int(self.winId()), FORWARD_ID)
-                win32api.UnregisterHotKey(int(self.winId()), BACKWARD_ID)
-                win32api.UnregisterHotKey(int(self.winId()), FULLSCREEN_ID)
-                win32api.UnregisterHotKey(int(self.winId()), VOLUME_UP_ID)
-                win32api.UnregisterHotKey(int(self.winId()), VOLUME_DOWN_ID)
-            except:
-                pass
+        # if sys.platform == "win32":
+        #     try:
+        #         win32api.UnregisterHotKey(int(self.winId()), PLAY_PAUSE_ID)
+        #         win32api.UnregisterHotKey(int(self.winId()), FORWARD_ID)
+        #         win32api.UnregisterHotKey(int(self.winId()), BACKWARD_ID)
+        #         win32api.UnregisterHotKey(int(self.winId()), FULLSCREEN_ID)
+        #         win32api.UnregisterHotKey(int(self.winId()), VOLUME_UP_ID)
+        #         win32api.UnregisterHotKey(int(self.winId()), VOLUME_DOWN_ID)
+        #     except:
+        #         pass
+        try:
+            keyboard.remove_hotkey(self.send_play_pause)
+            keyboard.remove_hotkey(self.send_forward)
+            keyboard.remove_hotkey(self.send_backward)
+            keyboard.remove_hotkey(self.send_fullscreen)
+        except:
+            pass
         self.close_webview()
 
     def send_command(self, command):
