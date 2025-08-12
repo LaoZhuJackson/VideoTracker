@@ -6,6 +6,15 @@ import os
 import sys
 import threading
 import traceback
+from pathlib import Path
+
+# 创建固定缓存目录
+project_root = Path.cwd()
+cache_dir = project_root / "AppData" / "webview_cache"
+cache_dir.mkdir(parents=True, exist_ok=True)
+
+# 告诉 WebView2 使用这个缓存目录
+os.environ["WEBVIEW2_USER_DATA_FOLDER"] = str(cache_dir)
 
 import webview
 from webview import Window
