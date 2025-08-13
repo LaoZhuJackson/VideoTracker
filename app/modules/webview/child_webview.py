@@ -154,15 +154,35 @@ class WebViewManager:
                                     video.currentTime = Math.max(0, video.currentTime - {config.backward_second.value});
                                     break;
                                 case 'fullscreen':
-                                    if (video.requestFullscreen) {{
-                                        video.requestFullscreen();
-                                    }} else if (video.webkitRequestFullscreen) {{
-                                        video.webkitRequestFullscreen();
-                                    }} else if (video.mozRequestFullScreen) {{
-                                        video.mozRequestFullScreen();
-                                    }} else if (video.msRequestFullscreen) {{
-                                        video.msRequestFullscreen();
+                                    // 检查当前是否有全屏元素
+                                    const fullscreenElement = document.fullscreenElement || 
+                                                             document.webkitFullscreenElement || 
+                                                             document.mozFullScreenElement || 
+                                                             document.msFullscreenElement;
+                                    
+                                    if (fullscreenElement) {{
+                                        // 如果已经有全屏元素，则退出全屏
+                                        if (document.exitFullscreen) {{
+                                            document.exitFullscreen();
+                                        }} else if (document.webkitExitFullscreen) {{
+                                            document.webkitExitFullscreen();
+                                        }} else if (document.mozCancelFullScreen) {{
+                                            document.mozCancelFullScreen();
+                                        }} else if (document.msExitFullscreen) {{
+                                            document.msExitFullscreen();
+                                        }}
+                                    }} else {{
+                                        if (video.requestFullscreen) {{
+                                            video.requestFullscreen();
+                                        }} else if (video.webkitRequestFullscreen) {{
+                                            video.webkitRequestFullscreen();
+                                        }} else if (video.mozRequestFullScreen) {{
+                                            video.mozRequestFullScreen();
+                                        }} else if (video.msRequestFullscreen) {{
+                                            video.msRequestFullscreen();
+                                        }}
                                     }}
+                                    
                                     break;
                                 case 'volume_up':
                                     video.volume = Math.min(1, video.volume + 0.1);
