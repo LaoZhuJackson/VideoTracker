@@ -1,7 +1,9 @@
 import json
+import os
 import sys
 import subprocess
 import ctypes
+import traceback
 import uuid
 from ctypes import wintypes
 
@@ -143,26 +145,38 @@ class WebView2Widget(QWidget):
         if self.child_proc and self.child_proc.poll() is None:
             return  # 已运行
 
-        cmd = [sys.executable, CHILD_PY, title, url]
-        # 添加启动信息参数，告诉子进程不要激活窗口
-        startupinfo = subprocess.STARTUPINFO()
-        # 使用stdin/stdout管道进行通信
-        self.child_proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding='utf-8',  # 强制用 UTF-8 解码
-            errors='replace',  # 遇到非法字节替换
-            bufsize=1,  # 行缓冲
-            universal_newlines=True,
-        )
-        print(f"PARENT: started child pid={self.child_proc.pid}", flush=True)
-        # 启动stdout读取线程
-        self.start_stdout_reader()
+        # 获取当前模块路径
+        base_dir = os.path.dirname(os.path.abspath(__file__))
 
-        self._poll_timer.start()
+        # 处理打包后的路径
+        if getattr(sys, 'frozen', False):
+            # 打包环境，sys._MEIPASS仅存于打包环境
+            child_py_path = os.path.join(sys._MEIPASS, "app", "modules", "webview", "child_webview.py")
+        else:
+            # 开发环境
+            child_py_path = os.path.join(base_dir, "child_webview.py")
+
+        cmd = [sys.executable, child_py_path, title, url]
+        try:
+            # 使用stdin/stdout管道进行通信
+            self.child_proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',  # 强制用 UTF-8 解码
+                errors='replace',  # 遇到非法字节替换
+                bufsize=1,  # 行缓冲
+                universal_newlines=True,
+            )
+            print(f"PARENT: started child pid={self.child_proc.pid}", flush=True)
+            # 启动stdout读取线程
+            self.start_stdout_reader()
+
+            self._poll_timer.start()
+        except Exception as e:
+            print(f"启动子进程失败: {traceback.format_exc()}", flush=True)
 
     def start_stdout_reader(self):
         """启动stdout读取线程"""
@@ -233,11 +247,6 @@ class WebView2Widget(QWidget):
         """关闭WebView"""
         if self.child_proc and self.child_proc.poll() is None:
             self.send_command("destroy")
-            self.child_proc.terminate()
-            try:
-                self.child_proc.wait(timeout=3)
-            except Exception:
-                self.child_proc.kill()
         self.child_proc = None
         self.child_hwnd = None
 

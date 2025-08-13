@@ -2,3 +2,4 @@ PyQt-Fluent-Widgets>=1.5.5
 pywebview
 keyboard
 pywin32
+nuitka

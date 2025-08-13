@@ -1,26 +1,56 @@
 # child_webview.py
 # 运行方式: python child_webview.py "<window_title>" "<url>"
-import ctypes
 import json
 import os
 import sys
+import tempfile
 import threading
-import time
 import traceback
 from pathlib import Path
 
 from app.common.config import config
 
-# 创建固定缓存目录
-project_root = Path.cwd()
-cache_dir = project_root / "AppData" / "webview_cache"
-cache_dir.mkdir(parents=True, exist_ok=True)
 
-# 告诉 WebView2 使用这个缓存目录
+# 检测打包环境
+if getattr(sys, 'frozen', False):
+    # 打包环境
+    base_path = sys._MEIPASS
+    print(f"Running in frozen environment, base_path: {base_path}", flush=True)
+else:
+    # 开发环境
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    print(f"Running in development environment, base_path: {base_path}", flush=True)
+
+# 创建缓存目录
+if getattr(sys, 'frozen', False):
+    # 打包环境使用临时目录
+    cache_dir = Path(tempfile.mkdtemp(prefix="webview_cache_"))
+else:
+    # 开发环境使用项目目录
+    project_root = Path(base_path).parent.parent.parent  # 调整路径层级
+    cache_dir = project_root / "AppData" / "webview_cache"
+
+print(f"Using cache directory: {cache_dir}", flush=True)
+cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ["WEBVIEW2_USER_DATA_FOLDER"] = str(cache_dir)
 
-import webview
-from webview import Window
+# 尝试导入 webview
+try:
+    import webview
+    from webview import Window
+    print("Successfully imported webview", flush=True)
+except ImportError as e:
+    print(f"Failed to import webview: {e}", flush=True)
+    # 在打包环境中尝试添加路径
+    if getattr(sys, 'frozen', False):
+        sys.path.append(os.path.join(base_path, "lib"))
+        try:
+            import webview
+            from webview import Window
+            print("Successfully imported webview from lib directory", flush=True)
+        except ImportError:
+            print("Still failed to import webview", flush=True)
+            sys.exit(1)
 
 
 class WebViewManager:
@@ -364,6 +394,18 @@ def main():
     title = sys.argv[1]
     url = sys.argv[2]
 
+    print(f"Starting WebView with title: {title}, url: {url}", flush=True)
+
+    # 获取当前工作目录
+    cwd = os.getcwd()
+    print(f"Current working directory: {cwd}", flush=True)
+
+    # 打印文件路径
+    print(f"__file__: {__file__}", flush=True)
+
+    data_dir = project_root / "AppData" / "webview_data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
     # 创建窗口（在 Windows 上，pywebview 会优先使用 WebView2）
     window = webview.create_window(title, url, frameless=False)
     manager = WebViewManager(window)
@@ -376,8 +418,6 @@ def main():
     t = threading.Thread(target=read_commands, args=(manager,), daemon=True)
     t.start()
 
-    data_dir = project_root / "AppData" / "webview_data"
-    data_dir.mkdir(parents=True, exist_ok=True)
     # start 必须在主线程,private_mode=False保证存cookies
     webview.start(debug=False, private_mode=False, storage_path=str(data_dir))
 

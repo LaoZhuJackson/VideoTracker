@@ -5,21 +5,28 @@ from distutils.sysconfig import get_python_lib
 
 # https://blog.csdn.net/qq_25262697/article/details/129302819
 # https://www.cnblogs.com/happylee666/articles/16158458.html
+
+child_webview_path = os.path.join("app", "modules", "webview", "child_webview.py")
+
 args = [
-    'nuitka',
-    '--standalone',
-    # '--windows-disable-console',
-    '--follow-import-to=app' ,
-    '--plugin-enable=pyqt5' ,
-    '--include-qt-plugins=sensible,styles' ,
-    '--msvc=latest',
-    '--show-memory' ,
-    '--show-progress' ,
-    '--windows-icon-from-ico=app/resource/images/logo.ico',
-    '--include-module=app',
-    '--nofollow-import-to=pywin',
-    '--follow-import-to=win32com,win32gui,win32print,qfluentwidgets,app',
+    "python",
+    "-m",
+    "nuitka",
+    "--show-progress",
+    "--show-memory",
+    "--standalone",
+    "--plugin-enable=pyqt5",
+    # "--windows-uac-admin",
+    # "--windows-console-mode=disable",
+    # 包含子进程文件
+    f"--include-data-file={child_webview_path}={child_webview_path}",
+    # 添加文件
+    "--include-data-dir=app/resource/images=app/resource/images",
+    "--include-data-dir=asset=asset",
     '--output-dir=dist/main',
+    "--windows-icon-from-ico=asset/logo.ico",
+    # 额外模组
+    "--include-module=app.modules.webview.child_webview",
     'main.py',
 ]
 
@@ -31,23 +38,23 @@ site_packages = Path(get_python_lib())
 
 copied_libs = []
 
-for src in copied_libs:
-    src = site_packages / src
-    dist = dist_folder / src.name
-
-    print(f"Coping site-packages `{src}` to `{dist}`")
-
-    try:
-        if src.is_file():
-            copy(src, dist)
-        else:
-            copytree(src, dist)
-    except:
-        pass
+# for src in copied_libs:
+#     src = site_packages / src
+#     dist = dist_folder / src.name
+#
+#     print(f"Coping site-packages `{src}` to `{dist}`")
+#
+#     try:
+#         if src.is_file():
+#             copy(src, dist)
+#         else:
+#             copytree(src, dist)
+#     except:
+#         pass
 
 
 # copy standard library
-copied_files = ["ctypes", "hashlib.py", "hmac.py", "random.py", "secrets.py", "uuid.py"]
+copied_files = ["subprocess.py", "uuid.py", "_winapi.py"]
 for file in copied_files:
     src = site_packages.parent / file
     dist = dist_folder / src.name
@@ -59,5 +66,5 @@ for file in copied_files:
             copy(src, dist)
         else:
             copytree(src, dist)
-    except:
-        pass
+    except Exception as e:
+        print(f"copy {src} to `{dist}` error:{e}")

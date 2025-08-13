@@ -4,7 +4,8 @@ from typing import Union
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QColor, QPainter, QIcon
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QWidget, QApplication
-from qfluentwidgets import SegmentedToggleToolWidget, FluentStyleSheet, qconfig, isDarkTheme, FluentIconBase
+from qfluentwidgets import SegmentedToggleToolWidget, FluentStyleSheet, qconfig, isDarkTheme, FluentIconBase, PivotItem, \
+    SegmentedToolItem
 from qfluentwidgets.common.animation import BackgroundAnimationWidget
 from qfluentwidgets.components.widgets.frameless_window import FramelessWindow
 from qfluentwidgets.window.fluent_window import FluentTitleBar
@@ -160,4 +161,4 @@ class MyMainWindow(BackgroundAnimationWidget, FramelessWindow):
 
     def resizeEvent(self, e):
         self.titleBar.move(10, 0)
-        self.titleBar.resize(self.width()-10, self.titleBar.height())
+        self.titleBar.resize(self.width() - 10, self.titleBar.height())

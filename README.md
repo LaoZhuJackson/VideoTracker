@@ -32,6 +32,14 @@
 - 跟着视频教程过游戏
 - 一切需要 `全屏窗口` + `浏览器小窗` 的操作
 
+# 使用教程（打包还在调试中）
+- 克隆本项目
+- 创建conda环境：`conda create -n env python==3.10`
+- 激活环境：`conda activate env`
+- 进入对应路径：`cd path/to/VideoTracker`
+- 安装所需的包：`pip install -r requirements.txt`
+- 运行：`python main.py`
+
 # 页面展示
 <details>
 <summary>👉 点击展开页面 👈</summary>
